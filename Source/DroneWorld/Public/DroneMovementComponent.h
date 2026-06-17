@@ -58,6 +58,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
 	FImperfectionParams Imperfection;
 
+	// The onboard camera's mount config - tilt range, rest angle, and stabilization - copied from the
+	// preset by ApplyPreset. The pawn reads it to drive the gimbal that carries both the flatscreen view
+	// and the VR Feed.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	FGimbalConfig Gimbal;
+
 	// The closing speed (cm/s) at or above which a contact crashes the drone; below it the contact is a
 	// harmless bump. Copied from the preset by ApplyPreset.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0"))

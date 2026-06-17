@@ -94,4 +94,27 @@ bool FDronePresetAppliesImperfectionConfigToMovementComponent::RunTest(const FSt
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDronePresetAppliesGimbalConfigToMovementComponent,
+	"DroneWorld.Preset.AppliesGimbalConfigToMovementComponent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDronePresetAppliesGimbalConfigToMovementComponent::RunTest(const FString& Parameters)
+{
+	// Applying a preset hands the component its gimbal config, so the onboard camera tilts within this
+	// drone's range and rests at its default - a steep FPV uptilt on one drone, a gentler look-ahead on
+	// another.
+	UDronePreset* Preset = NewObject<UDronePreset>(GetTransientPackage());
+	Preset->FlightModel = NewObject<UQuadFlightModel>(Preset);
+	Preset->Gimbal.MaxTiltDegrees = 60.f;
+	Preset->Gimbal.DefaultTiltDegrees = 25.f;
+
+	UDroneMovementComponent* Movement = NewObject<UDroneMovementComponent>(GetTransientPackage());
+	Movement->ApplyPreset(Preset);
+
+	TestEqual(TEXT("component adopts the preset's max tilt"), Movement->Gimbal.MaxTiltDegrees, 60.f);
+	TestEqual(TEXT("component adopts the preset's default tilt"), Movement->Gimbal.DefaultTiltDegrees, 25.f);
+	return true;
+}
+
 #endif // WITH_AUTOMATION_TESTS

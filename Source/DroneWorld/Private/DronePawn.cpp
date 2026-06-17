@@ -14,7 +14,8 @@
 
 ADronePawn::ADronePawn()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	// Tick to slew the gimbal tilt: a held D-pad press integrates into the pitch each frame.
+	PrimaryActorTick.bCanEverTick = true;
 
 	CollisionRoot = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionRoot"));
 	CollisionRoot->InitSphereRadius(20.f);
@@ -49,6 +50,27 @@ ADronePawn::ADronePawn()
 
 	// A placed drone is flyable on Play without a GameMode by auto-possessing the first local player.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
+}
+
+void ADronePawn::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// The movement component applied its preset during Super (component BeginPlay runs first), so the
+	// gimbal config is in place: seed the tilt at its default and point the camera there before the pilot
+	// touches the D-pad.
+	if (DroneMovement)
+	{
+		const FGimbalConfig& Config = DroneMovement->Gimbal;
+		GimbalTiltDegrees = FMath::Clamp(Config.DefaultTiltDegrees, Config.MinTiltDegrees, Config.MaxTiltDegrees);
+	}
+	UpdateGimbal(0.f);
+}
+
+void ADronePawn::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UpdateGimbal(DeltaSeconds);
 }
 
 void ADronePawn::PostInitializeComponents()
@@ -106,6 +128,13 @@ void ADronePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 		{
 			Input->BindAction(HoverToggleAction, ETriggerEvent::Started, this, &ADronePawn::OnToggleHover);
 		}
+		// Triggered keeps the held direction set while the D-pad is down; Completed clears it on
+		// release. The tick integrates that direction into the tilt, so holding sweeps the camera.
+		if (GimbalTiltAction)
+		{
+			Input->BindAction(GimbalTiltAction, ETriggerEvent::Triggered, this, &ADronePawn::OnGimbalTilt);
+			Input->BindAction(GimbalTiltAction, ETriggerEvent::Completed, this, &ADronePawn::OnGimbalTilt);
+		}
 	}
 }
 
@@ -125,6 +154,63 @@ void ADronePawn::OnToggleHover(const FInputActionValue& Value)
 {
 	bHoverEngaged = !bHoverEngaged;
 	PushControlIntent();
+}
+
+void ADronePawn::OnGimbalTilt(const FInputActionValue& Value)
+{
+	// Record only the held direction; the tick integrates it into the tilt so a held press slews the
+	// camera rather than snapping it to a stop.
+	GimbalTiltDirection = FMath::Clamp(Value.Get<float>(), -1.f, 1.f);
+}
+
+float ADronePawn::StepGimbalTilt(const FGimbalConfig& Config, float CurrentDegrees, float Direction, float HeldSeconds, float DeltaSeconds)
+{
+	const float Dir = FMath::Clamp(Direction, -1.f, 1.f);
+	if (FMath::IsNearlyZero(Dir))
+	{
+		// No key held: the tilt holds wherever the pilot left it.
+		return FMath::Clamp(CurrentDegrees, Config.MinTiltDegrees, Config.MaxTiltDegrees);
+	}
+
+	// The slew rate starts at the base rate and ramps up the longer the key is held, capped so it does
+	// not run away, so a tap nudges precisely while a long hold sweeps the range.
+	const float Rate = FMath::Min(
+		Config.TiltSlewRate + Config.TiltSlewAcceleration * FMath::Max(HeldSeconds, 0.f),
+		Config.TiltMaxSlewRate);
+
+	const float Next = CurrentDegrees + Dir * Rate * DeltaSeconds;
+	return FMath::Clamp(Next, Config.MinTiltDegrees, Config.MaxTiltDegrees);
+}
+
+void ADronePawn::UpdateGimbal(float DeltaSeconds)
+{
+	if (!GimbalMount || !DroneMovement)
+	{
+		return;
+	}
+
+	// Accumulate hold time while a direction is held so the slew accelerates; reset it when the key is
+	// released or the direction reverses, so each fresh press starts slow again.
+	if (FMath::IsNearlyZero(GimbalTiltDirection))
+	{
+		GimbalHeldSeconds = 0.f;
+	}
+	else
+	{
+		if (GimbalTiltDirection * GimbalLastTiltDirection < 0.f)
+		{
+			GimbalHeldSeconds = 0.f;
+		}
+
+		// The gimbal config lives on the movement component (copied from the preset). The mount is fixed
+		// to the airframe, so only its pitch is driven; the camera banks and bobs with the drone.
+		GimbalTiltDegrees = StepGimbalTilt(
+			DroneMovement->Gimbal, GimbalTiltDegrees, GimbalTiltDirection, GimbalHeldSeconds, DeltaSeconds);
+		GimbalHeldSeconds += DeltaSeconds;
+	}
+
+	GimbalLastTiltDirection = GimbalTiltDirection;
+	GimbalMount->SetRelativeRotation(FRotator(GimbalTiltDegrees, 0.f, 0.f));
 }
 
 void ADronePawn::PushControlIntent()

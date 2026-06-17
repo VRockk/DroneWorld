@@ -37,6 +37,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
 	FImperfectionParams Imperfection;
 
+	// How this drone's onboard camera is mounted: the controllable tilt range and rest angle, and whether
+	// the mount stabilizes the airframe's motion out of the shot. A cinematic rig is stabilized with a
+	// gentle tilt; a raw FPV cam is fixed to the body with a steep uptilt. Drives the gimbal that carries
+	// both the flatscreen view and the VR Feed, so the camera feel is a per-preset trait.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	FGimbalConfig Gimbal;
+
 	// The closing speed (cm/s) at which a contact crashes this drone rather than bumping off it. A
 	// flimsy small quad sets this low so it breaks on a firm knock; a rugged large one sets it high so
 	// it shrugs the same knock off, so drone toughness is a per-preset trait.

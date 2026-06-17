@@ -37,6 +37,10 @@ void UDroneMovementComponent::ApplyPreset(const UDronePreset* InPreset)
 	// motors to its own character.
 	Imperfection = InPreset->Imperfection;
 
+	// Adopt the preset's gimbal config so the onboard camera tilts within this drone's range and
+	// stabilizes (or not) to the designer's chosen camera feel.
+	Gimbal = InPreset->Gimbal;
+
 	// Adopt the preset's crash toughness so a flimsy drone breaks on a knock a rugged one shrugs off,
 	// and how much momentum the wreck keeps off the impact.
 	CrashThreshold = InPreset->CrashThreshold;

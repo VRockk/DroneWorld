@@ -69,6 +69,47 @@ struct FDroneFlightState
 	FVector Location = FVector::ZeroVector;
 };
 
+// The per-preset configuration of the drone's camera gimbal: how far the controllable tilt may travel,
+// where it starts, and how fast the pilot's hold-to-adjust slews it. It rides on the Preset alongside
+// the other shared params, so each drone carries its own camera feel - a steep FPV uptilt on one, a
+// gentler look-ahead on another. The mount is fixed to the airframe; only its pitch is controllable,
+// so the camera banks and bobs with the drone. The tilt is driven by held D-pad presses that nudge the
+// angle up or down rather than snapping to it, so it holds wherever the pilot releases it.
+USTRUCT(BlueprintType)
+struct FGimbalConfig
+{
+	GENERATED_BODY()
+
+	// The lowest tilt the pilot can command, degrees. Negative points the camera down.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal")
+	float MinTiltDegrees = -45.f;
+
+	// The highest tilt the pilot can command, degrees. Positive points the camera up.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal")
+	float MaxTiltDegrees = 30.f;
+
+	// Where the tilt starts when the drone spawns, degrees. The classic FPV uptilt points the camera a
+	// little off level so the drone flies looking ahead rather than at its feet; the pilot adjusts from
+	// here and the tilt holds wherever they leave it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal")
+	float DefaultTiltDegrees = 15.f;
+
+	// How fast the tilt slews the instant the pilot presses the tilt key, degrees per second. A gentle
+	// rate makes fine framing easy on a quick tap.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal", meta = (ClampMin = "0.0"))
+	float TiltSlewRate = 20.f;
+
+	// How much the slew speeds up for each second the key is held, degrees per second squared, so a long
+	// press sweeps the camera across its range quickly while a tap still nudges it precisely.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal", meta = (ClampMin = "0.0"))
+	float TiltSlewAcceleration = 60.f;
+
+	// The fastest the tilt may slew however long the key is held, degrees per second, so the acceleration
+	// tops out rather than running away.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal", meta = (ClampMin = "0.0"))
+	float TiltMaxSlewRate = 120.f;
+};
+
 // The output of a flight model: the net linear force and the angular acceleration the integrator
 // applies this step. Force is in mass-cm/s^2 (divide by mass for linear acceleration); Torque is a
 // body-axis angular acceleration in deg/s^2 (Roll about X, Pitch about Y, Yaw about Z), so the

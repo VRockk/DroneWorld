@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "Flight/DroneFlightTypes.h"
 #include "DronePawn.generated.h"
 
 class USphereComponent;
@@ -26,8 +27,16 @@ class DRONEWORLD_API ADronePawn : public APawn
 public:
 	ADronePawn();
 
+	virtual void BeginPlay() override;
 	virtual void PostInitializeComponents() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	// Advance the gimbal tilt one step: integrate the held direction (-1 down, +1 up, 0 idle) over
+	// DeltaSeconds at a slew rate that ramps with HeldSeconds, so the longer the pilot holds the tilt key
+	// the faster the camera pitches, clamped to the configured range. Returns the new tilt (degrees);
+	// HeldSeconds is the time the key has been held so far this press. Pure of (config, state, input, dt).
+	static float StepGimbalTilt(const FGimbalConfig& Config, float CurrentDegrees, float Direction, float HeldSeconds, float DeltaSeconds);
 
 protected:
 	// Swept collision body and pawn root.
@@ -75,6 +84,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
 	TObjectPtr<UInputAction> HoverToggleAction;
 
+	// Camera gimbal tilt (Axis1D): the held direction that pitches the onboard camera, +1 up and -1 down.
+	// Map it to the D-pad up/down; holding nudges the tilt within the preset's range and it speeds up the
+	// longer it is held. Assign an Input Action here; leave unset to keep the camera at the default tilt.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
+	TObjectPtr<UInputAction> GimbalTiltAction;
+
 	// Per-axis input shaping applied to the rotational sticks before they become Control Intent.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float StickDeadzone = 0.05f;
@@ -86,7 +101,13 @@ private:
 	void OnThrottleYaw(const FInputActionValue& Value);
 	void OnPitchRoll(const FInputActionValue& Value);
 	void OnToggleHover(const FInputActionValue& Value);
+	void OnGimbalTilt(const FInputActionValue& Value);
 	void PushControlIntent();
+
+	// Advance the gimbal tilt for this frame and point the mount at it, integrating the held direction
+	// over DeltaSeconds. Moves the mount that carries both the onboard camera and the Feed capture, so the
+	// tilt shows up identically on the flatscreen view and the VR Feed.
+	void UpdateGimbal(float DeltaSeconds);
 
 	// Latest raw stick positions, combined into Control Intent whenever either stick changes.
 	FVector2D ThrottleYawStick = FVector2D::ZeroVector;
@@ -94,4 +115,20 @@ private:
 
 	// Latched hover state, flipped by each press of the hover toggle and folded into Control Intent.
 	bool bHoverEngaged = false;
+
+	// The current gimbal tilt (pitch, degrees), held wherever the pilot leaves it. Seeded to the preset's
+	// default tilt on BeginPlay and slewed by the held tilt direction each tick.
+	float GimbalTiltDegrees = 0.f;
+
+	// The held tilt direction from input: +1 up, -1 down, 0 idle. Set by the D-pad action, integrated by
+	// the tick rather than applied directly, so a held button sweeps the tilt instead of snapping it.
+	float GimbalTiltDirection = 0.f;
+
+	// How long the current tilt direction has been held, seconds. Drives the accelerating slew and resets
+	// when the key is released or the direction reverses.
+	float GimbalHeldSeconds = 0.f;
+
+	// The tilt direction applied last tick, so a reversal (up to down without releasing) restarts the
+	// hold timer and the slew accelerates from the base rate again.
+	float GimbalLastTiltDirection = 0.f;
 };
