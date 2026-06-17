@@ -8,7 +8,7 @@ public class DroneWorld : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput",
-			"HeadMountedDisplay",   // HMD detection (UHeadMountedDisplayFunctionLibrary) and VR view setup
+			"HeadMountedDisplay", "XRBase",   // HMD detection (UHeadMountedDisplayFunctionLibrary) and VR view setup
 			"AIModule", "GameplayTasks", "NavigationSystem",   // Behavior Tree driving the AI drone
 			"UMG"   // OSD overlay drawn into the Feed render target
 		});

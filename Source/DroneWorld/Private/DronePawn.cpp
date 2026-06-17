@@ -4,6 +4,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "GameFramework/PlayerController.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -30,6 +31,20 @@ ADronePawn::ADronePawn()
 	OnboardCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("OnboardCamera"));
 	OnboardCamera->SetupAttachment(GimbalMount);
 
+	FeedCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("FeedCapture"));
+	FeedCapture->SetupAttachment(GimbalMount);
+
+	FeedCapture->CaptureSource = ESceneCaptureSource::SCS_SceneColorHDRNoAlpha;
+
+	// Stay idle until a controller assigns a render target,
+	// so a flatscreen or AI drone pays nothing for capture.
+	FeedCapture->bCaptureEveryFrame = false;
+	FeedCapture->bCaptureOnMovement = false;
+
+	// Persist the capture's rendering state so Temporal AA and motion vectors accumulate across frames.
+	// Without it the Feed shimmers and aliases instead of reading like the onboard camera's own image.
+	FeedCapture->bAlwaysPersistRenderingState = true;
+
 	DroneMovement = CreateDefaultSubobject<UDroneMovementComponent>(TEXT("DroneMovement"));
 
 	// A placed drone is flyable on Play without a GameMode by auto-possessing the first local player.
@@ -44,6 +59,16 @@ void ADronePawn::PostInitializeComponents()
 	if (DroneMovement)
 	{
 		DroneMovement->SetUpdatedComponent(CollisionRoot);
+	}
+
+	// The Feed must show the onboard camera's image, not a separately-tuned second render: share its
+	// field of view and post-processing. The capture already shares the gimbal mount, so it shares the
+	// transform too, and the captured render target becomes the camera's image fed to the screen.
+	if (FeedCapture && OnboardCamera)
+	{
+		FeedCapture->FOVAngle = OnboardCamera->FieldOfView;
+		FeedCapture->PostProcessSettings = OnboardCamera->PostProcessSettings;
+		FeedCapture->PostProcessBlendWeight = OnboardCamera->PostProcessBlendWeight;
 	}
 }
 

@@ -17,6 +17,8 @@ class DRONEWORLD_API ADroneGameMode : public AGameModeBase
 	GENERATED_BODY()
 
 public:
+	ADroneGameMode();
+
 	virtual void BeginPlay() override;
 
 	// Seconds a crashed drone is left to fall and tumble before it respawns, so the crash is seen rather

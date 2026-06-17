@@ -8,6 +8,7 @@ class USphereComponent;
 class UStaticMeshComponent;
 class USceneComponent;
 class UCameraComponent;
+class USceneCaptureComponent2D;
 class UDroneMovementComponent;
 class UInputMappingContext;
 class UInputAction;
@@ -45,6 +46,12 @@ protected:
 	// the VR Feed.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UCameraComponent> OnboardCamera;
+
+	// Captures the onboard camera's view to a render target so it can be shown as the Feed on the VR
+	// Pilot Station's screen. Shares the gimbal mount with the onboard camera, so it sees what the pilot
+	// flies by. Idle until a controller points it at a render target; flatscreen flight never captures.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
+	TObjectPtr<USceneCaptureComponent2D> FeedCapture;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UDroneMovementComponent> DroneMovement;

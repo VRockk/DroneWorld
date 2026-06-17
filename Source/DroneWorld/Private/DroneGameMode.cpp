@@ -1,9 +1,17 @@
 #include "DroneGameMode.h"
 #include "DronePawn.h"
+#include "DronePlayerController.h"
 #include "DroneMovementComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
+
+ADroneGameMode::ADroneGameMode()
+{
+	// Bring the scene up with the VR orchestration controller; a Blueprint GameMode can still override the
+	// pawn and controller classes per level.
+	PlayerControllerClass = ADronePlayerController::StaticClass();
+}
 
 void ADroneGameMode::BeginPlay()
 {
