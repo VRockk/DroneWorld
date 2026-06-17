@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Flight/DroneFlightTypes.h"
+#include "Flight/DroneImperfection.h"
 #include "DronePreset.generated.h"
 
 class UDroneFlightModel;
@@ -29,4 +30,10 @@ public:
 	// the sticks are released.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0"))
 	float LevelingStrength = 6.f;
+
+	// How this drone bobs, drifts, feels the wind, and spools its motors. Shared across all flight
+	// models and applied uniformly, so a light drone can be tuned to be shoved harder and to wander more
+	// than a heavy one. Susceptibility lives here so drone size genuinely matters in the wind.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	FImperfectionParams Imperfection;
 };

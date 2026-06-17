@@ -71,4 +71,27 @@ bool FDronePresetAppliesAssistConfigToMovementComponent::RunTest(const FString& 
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDronePresetAppliesImperfectionConfigToMovementComponent,
+	"DroneWorld.Preset.AppliesImperfectionConfigToMovementComponent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDronePresetAppliesImperfectionConfigToMovementComponent::RunTest(const FString& Parameters)
+{
+	// Applying a preset hands the component its Imperfection Layer tuning, so this drone bobs, drifts,
+	// feels the wind, and spools its motors with the character the designer set - a light drone tuned to
+	// be shoved harder than a heavy one carries that susceptibility onto the component.
+	UDronePreset* Preset = NewObject<UDronePreset>(GetTransientPackage());
+	Preset->FlightModel = NewObject<UQuadFlightModel>(Preset);
+	Preset->Imperfection.WindSusceptibility = 3.5f;
+	Preset->Imperfection.MotorLagTau = 0.25f;
+
+	UDroneMovementComponent* Movement = NewObject<UDroneMovementComponent>(GetTransientPackage());
+	Movement->ApplyPreset(Preset);
+
+	TestEqual(TEXT("component adopts the preset's wind susceptibility"), Movement->Imperfection.WindSusceptibility, 3.5f);
+	TestEqual(TEXT("component adopts the preset's motor lag"), Movement->Imperfection.MotorLagTau, 0.25f);
+	return true;
+}
+
 #endif // WITH_AUTOMATION_TESTS

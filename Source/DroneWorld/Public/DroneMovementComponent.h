@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "Flight/DroneFlightTypes.h"
+#include "Flight/DroneImperfection.h"
 #include "DroneMovementComponent.generated.h"
 
 class UDroneFlightModel;
@@ -47,6 +48,11 @@ public:
 	UPROPERTY(EditAnywhere, Instanced, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UDroneFlightModel> FlightModel;
 
+	// The Imperfection Layer tuning - bob, drift, wind susceptibility, motor lag - copied from the
+	// preset by ApplyPreset. Applied uniformly on top of whatever the flight model computes.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	FImperfectionParams Imperfection;
+
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -64,4 +70,16 @@ private:
 	// Whether hover was engaged on the previous tick, so the hold point is captured only on the
 	// rising edge rather than reset every frame.
 	bool bWasHovering = false;
+
+	// The realized throttle after motor lag, spooling toward the commanded throttle across ticks so
+	// thrust ramps in rather than snapping. Carried between ticks.
+	float SpooledThrottle = 0.f;
+
+	// Seconds of flight elapsed, advancing the deterministic bob and drift so the perturbation evolves
+	// smoothly over time.
+	float ImperfectionTime = 0.f;
+
+	// A per-drone seed so two drones placed side by side bob and drift on independent paths instead of
+	// in lockstep. Derived from the instance on BeginPlay.
+	int32 ImperfectionSeed = 0;
 };
