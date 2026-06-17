@@ -9,6 +9,11 @@
 class UDroneFlightModel;
 class UDronePreset;
 
+// Broadcast once when a contact crashes the drone, carrying the pawn that crashed. The movement
+// component only announces the crash; what happens next - respawn, scoring - is the listener's job
+// (the GameMode), so movement owns the Crash state but not the recovery policy.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDroneCrashed, APawn*, CrashedPawn);
+
 // The drone's kinematic movement: a thin orchestrator that, each tick, feeds the current Control
 // Intent and motion state through the Flight Model to get force and angular acceleration, advances
 // them with a semi-implicit Euler integrator, and applies the result via swept collision. The
@@ -53,6 +58,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
 	FImperfectionParams Imperfection;
 
+	// The closing speed (cm/s) at or above which a contact crashes the drone; below it the contact is a
+	// harmless bump. Copied from the preset by ApplyPreset.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0"))
+	float CrashThreshold = 800.f;
+
+	// The fraction of its impact velocity the drone keeps when it crashes, 0 (dead stop) .. 1 (no loss),
+	// so the wreck tumbles off with some momentum rather than stopping dead. Copied from the preset by
+	// ApplyPreset.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CrashMomentumRetention = 0.4f;
+
+	// Fired when a contact crashes this drone. The GameMode listens to respawn; this component never
+	// respawns or scores itself.
+	UPROPERTY(BlueprintAssignable, Category = "Drone")
+	FOnDroneCrashed OnCrashed;
+
+	// Whether the drone is currently crashed - dead to the sticks, falling and tumbling under gravity.
+	UFUNCTION(BlueprintPure, Category = "Drone")
+	bool IsCrashed() const { return bCrashed; }
+
+	// Return a crashed drone to flying: clear the Crash state and its tumble so the pilot has control
+	// again. The GameMode calls this after placing the drone at a respawn transform.
+	UFUNCTION(BlueprintCallable, Category = "Drone")
+	void RecoverFromCrash();
+
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, enum ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -82,4 +112,13 @@ private:
 	// A per-drone seed so two drones placed side by side bob and drift on independent paths instead of
 	// in lockstep. Derived from the instance on BeginPlay.
 	int32 ImperfectionSeed = 0;
+
+	// Whether the drone is crashed: the sticks are cut and it falls and tumbles until the GameMode
+	// respawns it. Set on a qualifying impact, cleared by RecoverFromCrash.
+	bool bCrashed = false;
+
+	// Enter the Crash state: latch bCrashed, impart a tumble spin, and announce the crash once so the
+	// GameMode can respawn. Ignored if already crashed, so a tumbling wreck striking more geometry does
+	// not re-fire the event.
+	void EnterCrash();
 };

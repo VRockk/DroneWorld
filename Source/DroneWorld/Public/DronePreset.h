@@ -36,4 +36,16 @@ public:
 	// than a heavy one. Susceptibility lives here so drone size genuinely matters in the wind.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
 	FImperfectionParams Imperfection;
+
+	// The closing speed (cm/s) at which a contact crashes this drone rather than bumping off it. A
+	// flimsy small quad sets this low so it breaks on a firm knock; a rugged large one sets it high so
+	// it shrugs the same knock off, so drone toughness is a per-preset trait.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0"))
+	float CrashThreshold = 800.f;
+
+	// The fraction of its impact velocity a crashing drone keeps, 0 (dead stop) .. 1 (no loss). The
+	// wreck carries this much momentum off the impact so it tumbles away rather than stopping dead, while
+	// gravity and drag bleed the rest as it falls.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float CrashMomentumRetention = 0.4f;
 };
