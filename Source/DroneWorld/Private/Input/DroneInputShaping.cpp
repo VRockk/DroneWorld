@@ -16,6 +16,31 @@ float DroneInput::ShapeAxis(float Raw, float Deadzone, float Expo)
 	return FMath::Sign(Raw) * Shaped;
 }
 
+float DroneInput::ShapeAxis(float Raw, const FDroneRates& Rates)
+{
+	// The deadzone + expo curve sets the shape; the rate scales it, so sensitivity is a per-preset trait
+	// layered on top of the same curve every drone shares.
+	return Rates.RateScale * ShapeAxis(Raw, Rates.Deadzone, Rates.Expo);
+}
+
+FDroneControlIntent DroneInput::GateMotors(const FDroneControlIntent& Intent)
+{
+	if (Intent.bArmed)
+	{
+		return Intent;
+	}
+
+	// Disarmed: keep the mode flags but cut everything the motors act on, so a disarmed drone makes no
+	// thrust and no commanded rotation no matter what the pilot does with the sticks. The flight model
+	// still applies gravity and drag, so the drone simply sits or falls rather than flying.
+	FDroneControlIntent Gated = Intent;
+	Gated.Throttle = 0.f;
+	Gated.Yaw = 0.f;
+	Gated.Pitch = 0.f;
+	Gated.Roll = 0.f;
+	return Gated;
+}
+
 FDroneControlIntent DroneInput::MapMode2(float LeftX, float LeftY, float RightX, float RightY)
 {
 	FDroneControlIntent Intent;

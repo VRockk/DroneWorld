@@ -36,44 +36,64 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Drone")
 	void ApplyPreset(const UDronePreset* InPreset);
 
-	// The preset applied on BeginPlay. Leave unset to keep the default flight model.
+	// The preset that configures this drone, applied on BeginPlay. It is the single source of the drone's
+	// tuning - flight model, assist, imperfection, gimbal, rates, crash, and ground friction - so it must
+	// be set. The fields below are populated from it by ApplyPreset; they are not authored here.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UDronePreset> Preset;
 
-	// The assist mode the drone flies in when hover is not engaged; copied from the preset by
-	// ApplyPreset. Defaults to Angle so an unconfigured drone self-levels.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone")
+	// Runtime configuration copied from the Preset by ApplyPreset. These are hidden from the component's
+	// details panel because the Preset owns the values - editing them here would only be overwritten on
+	// BeginPlay - and are exposed solely for Blueprint reads and the pawn's runtime use.
+
+	// The assist mode the drone flies in when hover is not engaged. Defaults to Angle so it self-levels.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	EDroneAssistMode BaseAssistMode = EDroneAssistMode::Angle;
 
-	// Self-leveling stiffness fed to the Angle-mode correction; copied from the preset by ApplyPreset.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone")
+	// Self-leveling stiffness fed to the Angle-mode correction.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	float LevelingStrength = 6.f;
 
-	// The instanced, inline-editable Flight Model that computes this drone's force and torque.
-	UPROPERTY(EditAnywhere, Instanced, BlueprintReadOnly, Category = "Drone")
+	// The Flight Model that computes this drone's force and torque.
+	UPROPERTY(Instanced, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UDroneFlightModel> FlightModel;
 
-	// The Imperfection Layer tuning - bob, drift, wind susceptibility, motor lag - copied from the
-	// preset by ApplyPreset. Applied uniformly on top of whatever the flight model computes.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	// The Imperfection Layer tuning - bob, drift, wind susceptibility, motor lag - applied uniformly on
+	// top of whatever the flight model computes.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	FImperfectionParams Imperfection;
 
-	// The onboard camera's mount config - tilt range, rest angle, and stabilization - copied from the
-	// preset by ApplyPreset. The pawn reads it to drive the gimbal that carries both the flatscreen view
-	// and the VR Feed.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ShowOnlyInnerProperties))
+	// The onboard camera's mount config - tilt range, rest angle, and stabilization. The pawn reads it to
+	// drive the gimbal that carries both the flatscreen view and the VR Feed.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	FGimbalConfig Gimbal;
 
-	// The closing speed (cm/s) at or above which a contact crashes the drone; below it the contact is a
-	// harmless bump. Copied from the preset by ApplyPreset.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0"))
+	// The stick shaping - deadzone, expo, and rate scale. The pawn reads it to shape raw sticks into
+	// Control Intent, so the drone's feel is a per-preset trait.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
+	FDroneRates Rates;
+
+	// The closing speed (cm/s) at or above which a contact crashes the drone; below it it is a bump.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	float CrashThreshold = 800.f;
 
 	// The fraction of its impact velocity the drone keeps when it crashes, 0 (dead stop) .. 1 (no loss),
-	// so the wreck tumbles off with some momentum rather than stopping dead. Copied from the preset by
-	// ApplyPreset.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drone", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	// so the wreck tumbles off with some momentum rather than stopping dead.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
 	float CrashMomentumRetention = 0.4f;
+
+	// Ground friction deceleration (cm/s^2) applied to a disarmed or crashed drone resting on a surface,
+	// so it scrubs to a stop instead of sliding along forever on the velocity it carried in. A flying
+	// drone is held by its motors and feels only aerodynamic drag, so this acts only when the motors are
+	// dead and the drone is grounded.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
+	float GroundFrictionDeceleration = 3000.f;
+
+	// Attitude settling stiffness (1/s^2) for a disarmed or crashed drone resting on the ground: how hard
+	// it rotates to lie flat against the slope. Acts only when the motors are dead and the drone is
+	// grounded; a drone that landed inverted settles onto its back rather than righting itself.
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Drone")
+	float GroundSettleStrength = 10.f;
 
 	// Fired when a contact crashes this drone. The GameMode listens to respawn; this component never
 	// respawns or scores itself.
@@ -83,6 +103,13 @@ public:
 	// Whether the drone is currently crashed - dead to the sticks, falling and tumbling under gravity.
 	UFUNCTION(BlueprintPure, Category = "Drone")
 	bool IsCrashed() const { return bCrashed; }
+
+	// Whether the drone is resting on a surface, refreshed from the downward ground probe each tick.
+	// More than friction and settling care that the drone is down: while grounded the Imperfection
+	// Layer's drift and wind are suppressed so a parked drone is not skated across the floor, and other
+	// systems can read it too.
+	UFUNCTION(BlueprintPure, Category = "Drone")
+	bool IsGrounded() const { return bGrounded; }
 
 	// Return a crashed drone to flying: clear the Crash state and its tumble so the pilot has control
 	// again. The GameMode calls this after placing the drone at a respawn transform.
@@ -123,8 +150,18 @@ private:
 	// respawns it. Set on a qualifying impact, cleared by RecoverFromCrash.
 	bool bCrashed = false;
 
+	// Whether the drone is resting on a surface this tick, refreshed from the downward ground probe at
+	// the top of each tick and read by friction, ground settling, and the Imperfection Layer.
+	bool bGrounded = false;
+
 	// Enter the Crash state: latch bCrashed, impart a tumble spin, and announce the crash once so the
 	// GameMode can respawn. Ignored if already crashed, so a tumbling wreck striking more geometry does
 	// not re-fire the event.
 	void EnterCrash();
+
+	// Probe straight down for a supporting surface and report its normal in OutNormal. A drone gliding
+	// flat across the floor sweeps into nothing horizontally, so the move's own hit misses the contact;
+	// this short downward sweep finds the ground whenever the drone is actually resting on it, so ground
+	// friction can act. Returns false when the drone is airborne.
+	bool FindGroundContact(FVector& OutNormal) const;
 };

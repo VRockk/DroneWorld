@@ -44,6 +44,12 @@ struct FDroneControlIntent
 	// it to take the sticks again. Orthogonal to the Acro/Angle base mode rather than a value of it.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Intent")
 	bool bHoverEngaged = false;
+
+	// Arm gate: the motors only respond to the sticks while this is set. A disarmed drone ignores
+	// throttle and rotation entirely - the pilot arms to fly and disarms to cut the motors. Defaults to
+	// disarmed so a freshly spawned drone sits inert until the pilot deliberately arms it.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Intent")
+	bool bArmed = false;
 };
 
 // The drone's instantaneous motion state, fed into the flight model and advanced by the integrator.
@@ -108,6 +114,32 @@ struct FGimbalConfig
 	// tops out rather than running away.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gimbal", meta = (ClampMin = "0.0"))
 	float TiltMaxSlewRate = 120.f;
+};
+
+// The per-preset shaping of raw stick travel into rotational Control Intent - the "rates" an RC pilot
+// tunes so each drone responds with its own character. A centered deadzone removes stick drift near
+// center; the expo curve bends the response so it is gentle around center and sharper toward the
+// edges for fine control without giving up full deflection; and the rate scale sets overall
+// sensitivity, so a punchy drone rotates harder than a docile one for the same stick.
+USTRUCT(BlueprintType)
+struct FDroneRates
+{
+	GENERATED_BODY()
+
+	// Centered deadzone removing stick drift near center, as a fraction of travel. Input within this is
+	// read as zero; travel beyond it is rescaled back to full range so the stick still reaches the edge.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rates", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Deadzone = 0.05f;
+
+	// Expo curve bend, 0 (linear) .. 1 (pure cubic). Higher expo softens the center for fine control
+	// while preserving full deflection at the edge, so the stick feels calm in the middle and lively out.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rates", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Expo = 0.3f;
+
+	// Overall sensitivity multiplier on the shaped stick. A higher rate makes the drone rotate harder for
+	// the same stick deflection, so two presets with different rates feel distinctly punchy or docile.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rates", meta = (ClampMin = "0.0"))
+	float RateScale = 1.f;
 };
 
 // The output of a flight model: the net linear force and the angular acceleration the integrator

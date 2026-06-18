@@ -98,16 +98,19 @@ namespace DroneFlight
 
 	// The additive imperfection force the movement component adds after the Flight Model's ideal forces,
 	// uniform across every model: a slow vertical hover bob (only while hovering), a smooth coherent-
-	// noise horizontal drift (always), and the world wind scaled by the preset's susceptibility. Pure of
+	// noise horizontal drift, and the world wind scaled by the preset's susceptibility. Pure of
 	// (params, seed, time, world wind): the same seed and time always yield the same perturbation, so a
 	// drone drifts repeatably and two drones with different seeds wander independently. Torque is left
-	// to the flight model; the layer perturbs the linear force only.
+	// to the flight model; the layer perturbs the linear force only. When bGrounded the whole layer is
+	// switched off: a drone resting on a surface is held by the ground, so it sits still rather than
+	// drifting, catching the wind, or wobbling.
 	DRONEWORLD_API FDroneForces ComputeImperfectionForces(
 		const FImperfectionParams& Params,
 		int32 Seed,
 		float TimeSeconds,
 		const FVector& WorldWind,
-		bool bHovering);
+		bool bHovering,
+		bool bGrounded = false);
 
 	// The horizontal offset the hover hold point drifts to at this moment: the same coherent-noise
 	// wander as the in-flight drift, scaled to DriftHoverRadius and returned as a position offset (cm)

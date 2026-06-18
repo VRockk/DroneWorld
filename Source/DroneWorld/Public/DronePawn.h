@@ -84,25 +84,31 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
 	TObjectPtr<UInputAction> HoverToggleAction;
 
+	// Arm toggle (digital button): each press arms or disarms the drone. The motors only respond to the
+	// sticks while armed, so the pilot arms to fly and disarms to cut them. Same bind setup as the other
+	// actions; assign an Input Action here and map a key to it, or leave unset to keep the drone disarmed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
+	TObjectPtr<UInputAction> ArmToggleAction;
+
 	// Camera gimbal tilt (Axis1D): the held direction that pitches the onboard camera, +1 up and -1 down.
 	// Map it to the D-pad up/down; holding nudges the tilt within the preset's range and it speeds up the
 	// longer it is held. Assign an Input Action here; leave unset to keep the camera at the default tilt.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
 	TObjectPtr<UInputAction> GimbalTiltAction;
 
-	// Per-axis input shaping applied to the rotational sticks before they become Control Intent.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float StickDeadzone = 0.05f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float StickExpo = 0.3f;
-
 private:
 	void OnThrottleYaw(const FInputActionValue& Value);
 	void OnPitchRoll(const FInputActionValue& Value);
 	void OnToggleHover(const FInputActionValue& Value);
+	void OnToggleArm(const FInputActionValue& Value);
 	void OnGimbalTilt(const FInputActionValue& Value);
 	void PushControlIntent();
+
+	// Disarm the drone when the movement component reports a crash. A crash already cuts the motors; this
+	// latches that into the arm state so the drone stays disarmed through the respawn and the pilot must
+	// deliberately re-arm before a recovered drone flies again, rather than it leaping back to life.
+	UFUNCTION()
+	void OnDroneCrashed(APawn* CrashedPawn);
 
 	// Advance the gimbal tilt for this frame and point the mount at it, integrating the held direction
 	// over DeltaSeconds. Moves the mount that carries both the onboard camera and the Feed capture, so the
@@ -115,6 +121,10 @@ private:
 
 	// Latched hover state, flipped by each press of the hover toggle and folded into Control Intent.
 	bool bHoverEngaged = false;
+
+	// Latched arm state, flipped by each press of the arm toggle and folded into Control Intent. Starts
+	// disarmed so a freshly possessed drone sits inert until the pilot deliberately arms it.
+	bool bArmed = false;
 
 	// The current gimbal tilt (pitch, degrees), held wherever the pilot leaves it. Seeded to the preset's
 	// default tilt on BeginPlay and slewed by the held tilt direction each tick.

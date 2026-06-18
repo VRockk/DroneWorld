@@ -134,4 +134,82 @@ bool FDroneAssistFixedWingHoverLoiters::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleLevelsOnFlatGround,
+	"DroneWorld.Assist.GroundSettleLevelsOnFlatGround",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleLevelsOnFlatGround::RunTest(const FString& Parameters)
+{
+	// On flat ground (normal straight up) an upright drone banked to the right gets a left-rolling
+	// correction that settles it flat - the same direction self-leveling pulls - with no commanded pitch.
+	const FVector FlatUp(0.f, 0.f, 1.f);
+	const FVector Torque = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FlatUp, 10.f);
+
+	TestTrue(TEXT("settle torque opposes a right bank on flat ground"), Torque.X < 0.f);
+	TestTrue(TEXT("settle commands no pitch when only rolled"), FMath::IsNearlyZero((float)Torque.Y, 0.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleMatchesSlopeNotWorldLevel,
+	"DroneWorld.Assist.GroundSettleMatchesSlopeNotWorldLevel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleMatchesSlopeNotWorldLevel::RunTest(const FString& Parameters)
+{
+	// Settling conforms to the slope, not to world level. A drone whose attitude already matches a tilted
+	// ground plane is settled - near-zero torque - even though it is not world-level. Self-leveling, which
+	// pulls toward world level, would instead fight that attitude, so the two disagree on a slope.
+	const FVector SlopeNormal = FVector(FMath::Sin(FMath::DegreesToRadians(20.f)), 0.f, FMath::Cos(FMath::DegreesToRadians(20.f)));
+	const FRotator MatchingSlope = FQuat::FindBetweenNormals(FVector::UpVector, SlopeNormal).Rotator();
+
+	const FVector Settle = DroneFlight::ComputeGroundSettleTorque(MatchingSlope, FVector::ZeroVector, SlopeNormal, 10.f);
+	TestTrue(TEXT("a drone aligned to the slope is settled (near-zero torque)"), Settle.Size() < 1.f);
+
+	FDroneFlightState OnSlope;
+	OnSlope.Orientation = MatchingSlope;
+	const FVector Leveling = DroneFlight::ComputeLevelingTorque(EDroneAssistMode::Angle, FDroneControlIntent(), OnSlope, 6.f);
+	TestTrue(TEXT("world self-leveling would fight the slope attitude settle accepts"), Leveling.Size() > 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleKeepsFlippedDroneFlipped,
+	"DroneWorld.Assist.GroundSettleKeepsFlippedDroneFlipped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleKeepsFlippedDroneFlipped::RunTest(const FString& Parameters)
+{
+	// A drone that came to rest inverted settles against the face it landed on rather than righting itself:
+	// fully upside-down on flat ground it is already settled (near-zero torque), and a mostly-inverted
+	// drone is pushed the rest of the way over onto its back, not back toward upright.
+	const FVector FlatUp(0.f, 0.f, 1.f);
+
+	const FVector Inverted = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 180.f), FVector::ZeroVector, FlatUp, 10.f);
+	TestTrue(TEXT("a fully inverted drone resting flat is already settled"), Inverted.Size() < 1.f);
+
+	// At 160 degrees of roll the nearest rest is fully inverted (180), not upright (0). The correction must
+	// drive roll further over (positive roll torque) rather than back toward level (negative).
+	const FVector MostlyInverted = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 160.f), FVector::ZeroVector, FlatUp, 10.f);
+	TestTrue(TEXT("a mostly-inverted drone settles deeper into the flip, not back upright"), MostlyInverted.X > 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleZeroWithoutUsableInput,
+	"DroneWorld.Assist.GroundSettleZeroWithoutUsableInput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleZeroWithoutUsableInput::RunTest(const FString& Parameters)
+{
+	// No ground normal and no strength both mean nothing to settle toward, so the torque is zero - an
+	// airborne drone (no contact) keeps whatever attitude it has.
+	TestTrue(TEXT("a zero normal yields no settle torque"),
+		DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FVector::ZeroVector, 10.f).IsNearlyZero());
+	TestTrue(TEXT("zero strength yields no settle torque"),
+		DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FVector(0.f, 0.f, 1.f), 0.f).IsNearlyZero());
+	return true;
+}
+
 #endif // WITH_AUTOMATION_TESTS

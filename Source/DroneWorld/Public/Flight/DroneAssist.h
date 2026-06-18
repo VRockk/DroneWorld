@@ -33,4 +33,17 @@ namespace DroneFlight
 		const FDroneControlIntent& Intent,
 		const FDroneFlightState& State,
 		float LevelingStrength);
+
+	// The attitude torque that settles a motorless drone flat onto the surface it rests on: a critically
+	// damped, body-axis correction that brings the drone's body-up axis into line with the ground normal
+	// so it lies parallel to the slope, keeping its heading. It settles against whichever face it came to
+	// rest on - aligning up to the normal when upright, or to the anti-normal when inverted - so a flipped
+	// drone stays flipped rather than righting itself. Only the tilt (roll/pitch) is corrected; yaw is
+	// left to the flight model's damping. Returns zero when there is no usable normal or no strength. The
+	// movement component adds this on the dead-motor path while the drone is grounded. Plain data in, out.
+	DRONEWORLD_API FVector ComputeGroundSettleTorque(
+		const FRotator& Orientation,
+		const FVector& AngularVelocity,
+		const FVector& GroundNormal,
+		float SettleStrength);
 }

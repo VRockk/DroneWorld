@@ -144,6 +144,32 @@ bool FDroneImperfectionDriftKeepsANonHoveringDroneAlive::RunTest(const FString& 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneImperfectionGroundedSuppressesAllPerturbation,
+	"DroneWorld.Imperfection.GroundedSuppressesAllPerturbation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneImperfectionGroundedSuppressesAllPerturbation::RunTest(const FString& Parameters)
+{
+	// A drone resting on a surface is held by the ground, not flying, so the whole layer switches off: no
+	// drift or wind to skate it across the floor and no attitude wobble to jitter it in place - a parked
+	// drone sits perfectly still. Airborne the same tuning perturbs both force and torque as before.
+	FImperfectionParams Params;
+	Params.DriftAmplitude = 300.f;
+	Params.WindSusceptibility = 2.f;
+	Params.AttitudeWobbleAmplitude = 20.f;
+	const FVector WorldWind(150.f, -60.f, 0.f);
+
+	const FDroneForces Airborne = DroneFlight::ComputeImperfectionForces(Params, 5, 0.37f, WorldWind, /*bHovering*/ false, /*bGrounded*/ false);
+	const FDroneForces Grounded = DroneFlight::ComputeImperfectionForces(Params, 5, 0.37f, WorldWind, /*bHovering*/ false, /*bGrounded*/ true);
+
+	TestTrue(TEXT("airborne, the layer perturbs the linear force"), Airborne.Force.Size() > 1.f);
+	TestTrue(TEXT("airborne, the layer wobbles roll and pitch"), Airborne.Torque.Size() > 0.f);
+	TestTrue(TEXT("grounded, no perturbing force remains"), Grounded.Force.IsNearlyZero());
+	TestTrue(TEXT("grounded, no perturbing torque remains"), Grounded.Torque.IsNearlyZero());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FDroneImperfectionHoverDriftMovesTheHoldPointNotTheForce,
 	"DroneWorld.Imperfection.HoverDriftMovesTheHoldPointNotTheForce",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

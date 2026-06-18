@@ -47,9 +47,18 @@ FDroneForces DroneFlight::ComputeImperfectionForces(
 	int32 Seed,
 	float TimeSeconds,
 	const FVector& WorldWind,
-	bool bHovering)
+	bool bHovering,
+	bool bGrounded)
 {
 	FDroneForces Out;
+
+	// A drone resting on a surface is held by the ground, not flying. The whole layer exists to keep
+	// airborne flight from ever being perfectly still or perfectly rigid, so on the ground it adds
+	// nothing: a parked drone neither drifts, catches the wind, wobbles, nor bobs - it sits still.
+	if (bGrounded)
+	{
+		return Out;
+	}
 
 	// A seed-derived phase so each drone wanders on its own path; the same seed reproduces it exactly,
 	// and two drones with different seeds drift independently.

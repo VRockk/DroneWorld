@@ -63,6 +63,10 @@ void ADronePawn::BeginPlay()
 	{
 		const FGimbalConfig& Config = DroneMovement->Gimbal;
 		GimbalTiltDegrees = FMath::Clamp(Config.DefaultTiltDegrees, Config.MinTiltDegrees, Config.MaxTiltDegrees);
+
+		// A crash must disarm the drone, so subscribe to the movement component's crash event and cut the
+		// arm state when it fires (see OnDroneCrashed).
+		DroneMovement->OnCrashed.AddDynamic(this, &ADronePawn::OnDroneCrashed);
 	}
 	UpdateGimbal(0.f);
 }
@@ -128,6 +132,11 @@ void ADronePawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 		{
 			Input->BindAction(HoverToggleAction, ETriggerEvent::Started, this, &ADronePawn::OnToggleHover);
 		}
+		// Same as hover: Started fires once per press, so each tap flips the arm state rather than spamming it.
+		if (ArmToggleAction)
+		{
+			Input->BindAction(ArmToggleAction, ETriggerEvent::Started, this, &ADronePawn::OnToggleArm);
+		}
 		// Triggered keeps the held direction set while the D-pad is down; Completed clears it on
 		// release. The tick integrates that direction into the tilt, so holding sweeps the camera.
 		if (GimbalTiltAction)
@@ -153,6 +162,21 @@ void ADronePawn::OnPitchRoll(const FInputActionValue& Value)
 void ADronePawn::OnToggleHover(const FInputActionValue& Value)
 {
 	bHoverEngaged = !bHoverEngaged;
+	PushControlIntent();
+}
+
+void ADronePawn::OnToggleArm(const FInputActionValue& Value)
+{
+	bArmed = !bArmed;
+	PushControlIntent();
+}
+
+void ADronePawn::OnDroneCrashed(APawn* CrashedPawn)
+{
+	// The crash already cut the motors; latch it into the arm state so the drone stays disarmed through
+	// the respawn. The pilot must deliberately re-arm before the recovered drone flies again, rather than
+	// it springing back to life on the first stick nudge.
+	bArmed = false;
 	PushControlIntent();
 }
 
@@ -223,14 +247,18 @@ void ADronePawn::PushControlIntent()
 	FDroneControlIntent Intent = DroneInput::MapMode2(
 		ThrottleYawStick.X, ThrottleYawStick.Y, PitchRollStick.X, PitchRollStick.Y);
 
-	// Throttle passes through raw; the rotational sticks get deadzone + expo for a calmer center.
-	Intent.Yaw = DroneInput::ShapeAxis(Intent.Yaw, StickDeadzone, StickExpo);
-	Intent.Pitch = DroneInput::ShapeAxis(Intent.Pitch, StickDeadzone, StickExpo);
-	Intent.Roll = DroneInput::ShapeAxis(Intent.Roll, StickDeadzone, StickExpo);
+	// Throttle passes through raw; the rotational sticks get this drone's rates - deadzone + expo for a
+	// calmer center, scaled by the preset's sensitivity - so each drone responds with its own character.
+	const FDroneRates& Rates = DroneMovement->Rates;
+	Intent.Yaw = DroneInput::ShapeAxis(Intent.Yaw, Rates);
+	Intent.Pitch = DroneInput::ShapeAxis(Intent.Pitch, Rates);
+	Intent.Roll = DroneInput::ShapeAxis(Intent.Roll, Rates);
 
-	// Carry the latched hover toggle alongside the sticks, since SetControlIntent replaces the whole
-	// intent each push.
+	// Carry the latched mode toggles alongside the sticks, since SetControlIntent replaces the whole
+	// intent each push: hover overrides the base assist mode, and the arm gate decides whether the motors
+	// respond to any of this at all.
 	Intent.bHoverEngaged = bHoverEngaged;
+	Intent.bArmed = bArmed;
 
 	DroneMovement->SetControlIntent(Intent);
 }
