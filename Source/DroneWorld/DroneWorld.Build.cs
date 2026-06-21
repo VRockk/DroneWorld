@@ -13,7 +13,14 @@ public class DroneWorld : ModuleRules
 			"UMG"   // OSD overlay drawn into the Feed render target
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+		PrivateDependencyModuleNames.AddRange(new string[] {
+			"NNE",                       // inference (UNNEModelData, INNERuntimeGPU) via NNERuntimeTRT
+			"RenderCore", "RHI", "Renderer",   // SceneViewExtension backbuffer capture (RDG, ScreenPass, GPU readback)
+			"Slate", "SlateCore",        // detection box overlay + on-screen config panel
+			"MediaAssets",               // video-playback detection level (MediaPlayer/MediaTexture/FileMediaSource)
+			"CinematicCamera",           // UCineCameraComponent — the detector's pan/tilt/zoom camera
+			"Projects"
+		});
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

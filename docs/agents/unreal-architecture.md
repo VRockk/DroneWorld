@@ -1,6 +1,6 @@
 # Analyzing the architecture of this Unreal project
 
-Guidance for `/improve-codebase-architecture` (and any architecture analysis) on LemonCluster.
+Guidance for `/improve-codebase-architecture` (and any architecture analysis) on DroneWorld.
 Unreal Engine projects have structural rules that don't show up in plain C++ codebases — what
 looks like a smell is often a required engine pattern, and the most important seam in the project
 is invisible to text tooling. Read this before generating candidates.
@@ -60,5 +60,5 @@ That has direct consequences for analysis:
 - **Read `docs/adr/` before generating candidates.** ADRs record decisions the analysis must
   not re-litigate; respect them, and only reopen one when the friction is real enough to warrant
   it (mark it clearly when you do).
-- **All platform-specific candidates must cover both `Win64` and `LinuxArm64`.** This project
-  ships to both; a candidate that only reasons about one platform is incomplete.
+- **This project targets `Win64` only.** Don't add other-platform handling or cross-platform
+  candidates — Win64 is the sole shipping platform.
