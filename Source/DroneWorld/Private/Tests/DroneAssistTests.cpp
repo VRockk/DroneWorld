@@ -81,7 +81,7 @@ bool FDroneAssistQuadHoverHoldsAtSetpoint::RunTest(const FString& Parameters)
 	const FDroneForces Forces = DroneFlight::ComputeQuadHoverForces(Released, State, Hold, Params);
 
 	TestTrue(TEXT("no horizontal force when parked on the setpoint"), FMath::IsNearlyZero((float)Forces.Force.X) && FMath::IsNearlyZero((float)Forces.Force.Y));
-	TestTrue(TEXT("upward force balances weight"), FMath::IsNearlyEqual((float)Forces.Force.Z, Params.Mass * Params.GravityAccel, 1.f));
+	TestTrue(TEXT("upward force balances weight"), FMath::IsNearlyEqual((float)Forces.Force.Z, Params.Mass * DroneFlight::GravityAccel, 1.f));
 	return true;
 }
 
@@ -104,7 +104,7 @@ bool FDroneAssistQuadHoverPullsTowardSetpoint::RunTest(const FString& Parameters
 	const FDroneForces Forces = DroneFlight::ComputeQuadHoverForces(Released, State, Hold, Params);
 
 	TestTrue(TEXT("force pushes back toward the hold point horizontally"), Forces.Force.X < 0.f);
-	TestTrue(TEXT("force lifts harder than weight when below the hold altitude"), Forces.Force.Z > Params.Mass * Params.GravityAccel);
+	TestTrue(TEXT("force lifts harder than weight when below the hold altitude"), Forces.Force.Z > Params.Mass * DroneFlight::GravityAccel);
 	return true;
 }
 
@@ -131,6 +131,84 @@ bool FDroneAssistFixedWingHoverLoiters::RunTest(const FString& Parameters)
 	// It circles rather than chasing a point: shifting the hold point horizontally changes nothing.
 	const FDroneForces Shifted = DroneFlight::ComputeFixedWingHoverForces(Released, State, FVector(100000.f, 50000.f, 0.f), Params);
 	TestTrue(TEXT("loiter ignores the horizontal hold point"), Shifted.Force.Equals(Forces.Force) && Shifted.Torque.Equals(Forces.Torque));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleLevelsOnFlatGround,
+	"DroneWorld.Assist.GroundSettleLevelsOnFlatGround",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleLevelsOnFlatGround::RunTest(const FString& Parameters)
+{
+	// On flat ground (normal straight up) an upright drone banked to the right gets a left-rolling
+	// correction that settles it flat - the same direction self-leveling pulls - with no commanded pitch.
+	const FVector FlatUp(0.f, 0.f, 1.f);
+	const FVector Torque = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FlatUp, 10.f);
+
+	TestTrue(TEXT("settle torque opposes a right bank on flat ground"), Torque.X < 0.f);
+	TestTrue(TEXT("settle commands no pitch when only rolled"), FMath::IsNearlyZero((float)Torque.Y, 0.5f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleMatchesSlopeNotWorldLevel,
+	"DroneWorld.Assist.GroundSettleMatchesSlopeNotWorldLevel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleMatchesSlopeNotWorldLevel::RunTest(const FString& Parameters)
+{
+	// Settling conforms to the slope, not to world level. A drone whose attitude already matches a tilted
+	// ground plane is settled - near-zero torque - even though it is not world-level. Self-leveling, which
+	// pulls toward world level, would instead fight that attitude, so the two disagree on a slope.
+	const FVector SlopeNormal = FVector(FMath::Sin(FMath::DegreesToRadians(20.f)), 0.f, FMath::Cos(FMath::DegreesToRadians(20.f)));
+	const FRotator MatchingSlope = FQuat::FindBetweenNormals(FVector::UpVector, SlopeNormal).Rotator();
+
+	const FVector Settle = DroneFlight::ComputeGroundSettleTorque(MatchingSlope, FVector::ZeroVector, SlopeNormal, 10.f);
+	TestTrue(TEXT("a drone aligned to the slope is settled (near-zero torque)"), Settle.Size() < 1.f);
+
+	FDroneFlightState OnSlope;
+	OnSlope.Orientation = MatchingSlope;
+	const FVector Leveling = DroneFlight::ComputeLevelingTorque(EDroneAssistMode::Angle, FDroneControlIntent(), OnSlope, 6.f);
+	TestTrue(TEXT("world self-leveling would fight the slope attitude settle accepts"), Leveling.Size() > 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleKeepsFlippedDroneFlipped,
+	"DroneWorld.Assist.GroundSettleKeepsFlippedDroneFlipped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleKeepsFlippedDroneFlipped::RunTest(const FString& Parameters)
+{
+	// A drone that came to rest inverted settles against the face it landed on rather than righting itself:
+	// fully upside-down on flat ground it is already settled (near-zero torque), and a mostly-inverted
+	// drone is pushed the rest of the way over onto its back, not back toward upright.
+	const FVector FlatUp(0.f, 0.f, 1.f);
+
+	const FVector Inverted = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 180.f), FVector::ZeroVector, FlatUp, 10.f);
+	TestTrue(TEXT("a fully inverted drone resting flat is already settled"), Inverted.Size() < 1.f);
+
+	// At 160 degrees of roll the nearest rest is fully inverted (180), not upright (0). The correction must
+	// drive roll further over (positive roll torque) rather than back toward level (negative).
+	const FVector MostlyInverted = DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 160.f), FVector::ZeroVector, FlatUp, 10.f);
+	TestTrue(TEXT("a mostly-inverted drone settles deeper into the flip, not back upright"), MostlyInverted.X > 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FDroneAssistGroundSettleZeroWithoutUsableInput,
+	"DroneWorld.Assist.GroundSettleZeroWithoutUsableInput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDroneAssistGroundSettleZeroWithoutUsableInput::RunTest(const FString& Parameters)
+{
+	// No ground normal and no strength both mean nothing to settle toward, so the torque is zero - an
+	// airborne drone (no contact) keeps whatever attitude it has.
+	TestTrue(TEXT("a zero normal yields no settle torque"),
+		DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FVector::ZeroVector, 10.f).IsNearlyZero());
+	TestTrue(TEXT("zero strength yields no settle torque"),
+		DroneFlight::ComputeGroundSettleTorque(FRotator(0.f, 0.f, 30.f), FVector::ZeroVector, FVector(0.f, 0.f, 1.f), 0.f).IsNearlyZero());
 	return true;
 }
 

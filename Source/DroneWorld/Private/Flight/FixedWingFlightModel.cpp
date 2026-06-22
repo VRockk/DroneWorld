@@ -29,7 +29,7 @@ FDroneForces DroneFlight::ComputeFixedWingForces(
 
 	// Gravity always pulls straight down. As a force it scales with mass, so its acceleration matches
 	// any other airframe.
-	const FVector GravityForce = FVector(0.f, 0.f, -Params.GravityAccel * Params.Mass);
+	const FVector GravityForce = FVector(0.f, 0.f, -DroneFlight::GravityAccel * Params.Mass);
 
 	// Linear drag is an aerodynamic force opposing world velocity, independent of mass.
 	const FVector DragForce = -State.Velocity * Params.DragCoefficient;

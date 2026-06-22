@@ -26,4 +26,6 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 
 ## Code conventions
 
+- **.h** files in public folder. **.cpp** in private folder.
+
 - **Comments describe the current code, not its history or roadmap.** Never reference past or future slices, issues, or work in a comment (e.g. "added in a later slice", "retargeted in #1", "TODO for the traffic slice"). A comment should explain what the code does and why, so it stays true regardless of when it's read. Put process/history in the issue tracker, not the source.

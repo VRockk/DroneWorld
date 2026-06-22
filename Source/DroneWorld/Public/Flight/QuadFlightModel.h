@@ -27,10 +27,6 @@ struct FQuadFlightParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quad", meta = (ClampMin = "0.0"))
 	float DragCoefficient = 2.5f;
 
-	// Gravitational acceleration, cm/s^2 (positive; applied downward).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quad", meta = (ClampMin = "0.0"))
-	float GravityAccel = 980.f;
-
 	// Angular acceleration produced by a full yaw/pitch/roll stick, deg/s^2.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quad", meta = (ClampMin = "0.0"))
 	float ControlAuthority = 180.f;

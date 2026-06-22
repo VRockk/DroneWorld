@@ -42,10 +42,6 @@ struct FFixedWingFlightParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FixedWing", meta = (ClampMin = "0.0"))
 	float DragCoefficient = 4.8f;
 
-	// Gravitational acceleration, cm/s^2 (positive; applied downward).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FixedWing", meta = (ClampMin = "0.0"))
-	float GravityAccel = 980.f;
-
 	// Angular acceleration produced by a full roll/pitch/yaw stick, deg/s^2.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FixedWing", meta = (ClampMin = "0.0"))
 	float ControlAuthority = 120.f;
