@@ -40,6 +40,12 @@ public:
 	// HeldSeconds is the time the key has been held so far this press. Pure of (config, state, input, dt).
 	static float StepGimbalTilt(const FGimbalConfig& Config, float CurrentDegrees, float Direction, float HeldSeconds, float DeltaSeconds);
 
+	// How far the rotor blades turn this frame (degrees): the constant spin rate over DeltaSeconds while
+	// armed, and nothing while disarmed, so the blades spin only when the motors are live. The rate is held
+	// constant rather than scaled by thrust - the difference is not readable on a spinning blade in game.
+	// Pure of (armed, rate, dt).
+	static float StepRotorSpin(bool bArmed, float SpinRateDegreesPerSecond, float DeltaSeconds);
+
 protected:
 	// Swept collision body and pawn root.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
@@ -48,6 +54,24 @@ protected:
 	// Visible drone body; the mesh asset is assigned in Blueprint.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UStaticMeshComponent> BodyMesh;
+
+	// The blades spin while armed. They are not fixed components on the pawn: a drone Blueprint adds however
+	// many blade mesh components it needs - four for a quad, one propeller for a fixed-wing, any count - and
+	// tags each with RotorMeshTag, which BeginPlay gathers and the tick spins. Nothing here assumes a rotor
+	// count, so the same pawn serves every airframe.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Rotors")
+	FName RotorMeshTag = TEXT("Rotor");
+
+	// The local axis each tagged blade spins around. Default up suits a quad's rotors lying flat; a
+	// fixed-wing propeller stands on its nose, so set this to its forward axis in that Blueprint. Applied in
+	// each blade's local space, so a blade mounted at any angle still spins about the airframe-relative axis.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Rotors")
+	FVector RotorSpinAxis = FVector::UpVector;
+
+	// How fast the blades spin while armed, degrees per second. A constant blur rather than a true rotor
+	// speed - tuned per Blueprint for the look of that drone, not its thrust.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Rotors")
+	float RotorSpinRateDegreesPerSecond = 1800.f;
 
 	// Pivot the onboard camera tilts on; the controllable gimbal mount.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
@@ -144,6 +168,18 @@ private:
 	// silenced while disarmed. Reads the live motor state from the movement component, so the sound spools
 	// up with the thrust and banking swings it between the corners.
 	void UpdateMotorAudio();
+
+	// Collect the blade meshes once at BeginPlay: every static mesh component the Blueprint tagged with
+	// RotorMeshTag. The set is fixed for the pawn's life, so it is gathered once rather than searched each tick.
+	void GatherRotorMeshes();
+
+	// Spin the gathered blades this frame: turn each one about RotorSpinAxis by the armed spin step, so they
+	// blur while the motors are live and sit still once disarmed.
+	void UpdateRotorSpin(float DeltaSeconds);
+
+	// The blade meshes tagged with RotorMeshTag, gathered at BeginPlay and spun each tick while armed.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> RotorMeshes;
 
 	// Latest raw stick positions, combined into Control Intent whenever either stick changes.
 	FVector2D ThrottleYawStick = FVector2D::ZeroVector;

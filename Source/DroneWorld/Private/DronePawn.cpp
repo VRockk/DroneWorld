@@ -90,6 +90,9 @@ void ADronePawn::BeginPlay()
 		DroneMovement->OnCrashed.AddDynamic(this, &ADronePawn::OnDroneCrashed);
 	}
 	UpdateGimbal(0.f);
+
+	// The Blueprint's blade meshes exist by now; gather the tagged ones once so the tick can spin them.
+	GatherRotorMeshes();
 }
 
 void ADronePawn::Tick(float DeltaSeconds)
@@ -97,6 +100,7 @@ void ADronePawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	UpdateGimbal(DeltaSeconds);
 	UpdateMotorAudio();
+	UpdateRotorSpin(DeltaSeconds);
 }
 
 void ADronePawn::PostInitializeComponents()
@@ -318,5 +322,54 @@ void ADronePawn::UpdateMotorAudio()
 		const FMotorAudioState Audio = DroneFlight::ComputeMotorAudio(MotorAudio, Rotor.Value, LastIntent.bArmed);
 		Rotor.Key->SetVolumeMultiplier(Audio.Volume);
 		Rotor.Key->SetPitchMultiplier(Audio.Pitch);
+	}
+}
+
+float ADronePawn::StepRotorSpin(bool bArmed, float SpinRateDegreesPerSecond, float DeltaSeconds)
+{
+	// The blades spin only while the motors are live; disarmed they hold still.
+	return bArmed ? SpinRateDegreesPerSecond * DeltaSeconds : 0.f;
+}
+
+void ADronePawn::GatherRotorMeshes()
+{
+	RotorMeshes.Reset();
+
+	TArray<UStaticMeshComponent*> MeshComponents;
+	GetComponents(MeshComponents);
+	for (UStaticMeshComponent* Mesh : MeshComponents)
+	{
+		if (Mesh && Mesh->ComponentHasTag(RotorMeshTag))
+		{
+			RotorMeshes.Add(Mesh);
+		}
+	}
+}
+
+void ADronePawn::UpdateRotorSpin(float DeltaSeconds)
+{
+	const float AngleDegrees = StepRotorSpin(bArmed, RotorSpinRateDegreesPerSecond, DeltaSeconds);
+	if (FMath::IsNearlyZero(AngleDegrees))
+	{
+		return;
+	}
+
+	// A zero or degenerate axis would yield an invalid rotation; without a spin direction there is nothing
+	// to do, so leave the blades where they are.
+	const FVector Axis = RotorSpinAxis.GetSafeNormal();
+	if (Axis.IsNearlyZero())
+	{
+		return;
+	}
+
+	// Turn each blade in its own local space, so a blade mounted at any angle still spins about the
+	// airframe-relative axis rather than drifting off it.
+	const FQuat Spin(Axis, FMath::DegreesToRadians(AngleDegrees));
+	for (const TObjectPtr<UStaticMeshComponent>& Mesh : RotorMeshes)
+	{
+		if (Mesh)
+		{
+			Mesh->AddLocalRotation(Spin);
+		}
 	}
 }
