@@ -100,6 +100,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Drone")
 	FOnDroneCrashed OnCrashed;
 
+	// The realized throttle after motor lag, 0 (idle) .. 1 (full): the thrust the motors have actually
+	// spooled up to, which trails the commanded throttle as it ramps. The pawn reads it to voice the motor
+	// audio, so the sound tracks the live motor state - spooling up with the thrust - rather than the raw
+	// stick. A disarmed drone spools toward zero, but the audio is silenced by the arm state regardless.
+	UFUNCTION(BlueprintPure, Category = "Drone")
+	float GetRealizedThrottle() const { return SpooledThrottle; }
+
 	// Whether the drone is currently crashed - dead to the sticks, falling and tumbling under gravity.
 	UFUNCTION(BlueprintPure, Category = "Drone")
 	bool IsCrashed() const { return bCrashed; }

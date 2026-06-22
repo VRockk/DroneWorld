@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Flight/DroneFlightTypes.h"
+#include "Flight/DroneMotorAudio.h"
 #include "DronePawn.generated.h"
 
 class USphereComponent;
@@ -10,6 +11,7 @@ class UStaticMeshComponent;
 class USceneComponent;
 class UCameraComponent;
 class USceneCaptureComponent2D;
+class UAudioComponent;
 class UDroneMovementComponent;
 class UInputMappingContext;
 class UInputAction;
@@ -65,6 +67,28 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone")
 	TObjectPtr<UDroneMovementComponent> DroneMovement;
 
+	// The four looping rotor sounds, one per corner, laid out as seen from above with the drone facing
+	// +X. Each is voiced from its own rotor's level so banking swings the sound across the airframe and
+	// spatialized audio pans it between the corners. Assign the looping motor sound and attenuation on
+	// each in Blueprint; the corner spacing is the drone's own size, so set it per pawn.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Audio")
+	TObjectPtr<UAudioComponent> RotorAudioFrontLeft;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Audio")
+	TObjectPtr<UAudioComponent> RotorAudioFrontRight;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Audio")
+	TObjectPtr<UAudioComponent> RotorAudioRearLeft;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Drone|Audio")
+	TObjectPtr<UAudioComponent> RotorAudioRearRight;
+
+	// This drone's motor voice - idle/full volume and pitch, and how hard banking swings the sound
+	// between rotors. Lives on the pawn beside the rotor sounds so each drone Blueprint carries its own
+	// motor character without touching the flight-tuning Preset.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Audio")
+	FMotorAudioParams MotorAudio;
+
 	// Enhanced Input assets, assigned in Blueprint. The mapping context carries both the gamepad
 	// RC "Mode 2" bindings and the keyboard fallback onto these two stick actions.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Drone|Input")
@@ -115,6 +139,12 @@ private:
 	// tilt shows up identically on the flatscreen view and the VR Feed.
 	void UpdateGimbal(float DeltaSeconds);
 
+	// Voice the four rotor sounds for this frame: mix the realized (motor-lagged) throttle across the
+	// corners by the current attitude demand, then set each rotor's volume and pitch from its level,
+	// silenced while disarmed. Reads the live motor state from the movement component, so the sound spools
+	// up with the thrust and banking swings it between the corners.
+	void UpdateMotorAudio();
+
 	// Latest raw stick positions, combined into Control Intent whenever either stick changes.
 	FVector2D ThrottleYawStick = FVector2D::ZeroVector;
 	FVector2D PitchRollStick = FVector2D::ZeroVector;
@@ -125,6 +155,10 @@ private:
 	// Latched arm state, flipped by each press of the arm toggle and folded into Control Intent. Starts
 	// disarmed so a freshly possessed drone sits inert until the pilot deliberately arms it.
 	bool bArmed = false;
+
+	// The intent last pushed to the movement component, kept so the motor-audio mix can read the live
+	// attitude demand (the shaped roll/pitch/yaw) and arm state without recomputing them.
+	FDroneControlIntent LastIntent;
 
 	// The current gimbal tilt (pitch, degrees), held wherever the pilot leaves it. Seeded to the preset's
 	// default tilt on BeginPlay and slewed by the held tilt direction each tick.

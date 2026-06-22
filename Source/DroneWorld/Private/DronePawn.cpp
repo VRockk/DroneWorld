@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
+#include "Components/AudioComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -48,6 +49,26 @@ ADronePawn::ADronePawn()
 
 	DroneMovement = CreateDefaultSubobject<UDroneMovementComponent>(TEXT("DroneMovement"));
 
+	// One looping rotor sound per corner, offset out to the airframe so spatialized audio pans the whine
+	// between them and banking swings it across the drone. The spacing here is a small-quad default; a
+	// larger drone widens it in Blueprint. The looping sound and attenuation are assigned per pawn. They
+	// auto-activate so the loop is always running; the per-tick volume (zero while disarmed) is what makes
+	// them heard or silent, rather than starting and stopping the voices.
+	const float CornerSpacing = 15.f;
+	auto MakeRotorAudio = [this](const TCHAR* Name, const FVector& Offset) -> UAudioComponent*
+	{
+		UAudioComponent* Audio = CreateDefaultSubobject<UAudioComponent>(Name);
+		Audio->SetupAttachment(CollisionRoot);
+		Audio->SetRelativeLocation(Offset);
+		Audio->bAutoActivate = true;
+		Audio->VolumeMultiplier = 0.f;   // silent until the first tick voices it, so a disarmed spawn makes no sound
+		return Audio;
+	};
+	RotorAudioFrontLeft = MakeRotorAudio(TEXT("RotorAudioFrontLeft"), FVector(CornerSpacing, -CornerSpacing, 0.f));
+	RotorAudioFrontRight = MakeRotorAudio(TEXT("RotorAudioFrontRight"), FVector(CornerSpacing, CornerSpacing, 0.f));
+	RotorAudioRearLeft = MakeRotorAudio(TEXT("RotorAudioRearLeft"), FVector(-CornerSpacing, -CornerSpacing, 0.f));
+	RotorAudioRearRight = MakeRotorAudio(TEXT("RotorAudioRearRight"), FVector(-CornerSpacing, CornerSpacing, 0.f));
+
 	// A placed drone is flyable on Play without a GameMode by auto-possessing the first local player.
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 }
@@ -75,6 +96,7 @@ void ADronePawn::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateGimbal(DeltaSeconds);
+	UpdateMotorAudio();
 }
 
 void ADronePawn::PostInitializeComponents()
@@ -260,5 +282,41 @@ void ADronePawn::PushControlIntent()
 	Intent.bHoverEngaged = bHoverEngaged;
 	Intent.bArmed = bArmed;
 
+	// Keep the pushed intent so the motor audio can read the live attitude demand and arm state each tick.
+	LastIntent = Intent;
+
 	DroneMovement->SetControlIntent(Intent);
+}
+
+void ADronePawn::UpdateMotorAudio()
+{
+	if (!DroneMovement)
+	{
+		return;
+	}
+
+	// Mix the realized (motor-lagged) throttle across the four corners by the live attitude demand, so the
+	// sound spools up with the thrust and banking swings it between the rotors. Then voice each rotor from
+	// its own level - silenced while disarmed - and set the volume and pitch on its looping sound.
+	const FQuadRotorLevels Levels = DroneFlight::ComputeQuadMotorMix(
+		DroneMovement->GetRealizedThrottle(), LastIntent.Roll, LastIntent.Pitch, LastIntent.Yaw, MotorAudio.RotorMixGain);
+
+	const TPair<UAudioComponent*, float> Rotors[] = {
+		{ RotorAudioFrontLeft, Levels.FrontLeft },
+		{ RotorAudioFrontRight, Levels.FrontRight },
+		{ RotorAudioRearLeft, Levels.RearLeft },
+		{ RotorAudioRearRight, Levels.RearRight },
+	};
+
+	for (const TPair<UAudioComponent*, float>& Rotor : Rotors)
+	{
+		if (!Rotor.Key)
+		{
+			continue;
+		}
+
+		const FMotorAudioState Audio = DroneFlight::ComputeMotorAudio(MotorAudio, Rotor.Value, LastIntent.bArmed);
+		Rotor.Key->SetVolumeMultiplier(Audio.Volume);
+		Rotor.Key->SetPitchMultiplier(Audio.Pitch);
+	}
 }
