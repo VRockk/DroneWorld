@@ -3,6 +3,13 @@
 #include "CoreMinimal.h"
 #include "DroneFlightTypes.generated.h"
 
+namespace DroneFlight
+{
+	// Gravitational acceleration, cm/s^2 (positive; applied downward). The same for every drone and
+	// every airframe - it is world physics, not per-type tuning - so the force laws share this one value.
+	inline constexpr float GravityAccel = 980.f;
+}
+
 // How much the flight assist helps the pilot. Acro is raw rate control with no self-leveling, so
 // the drone holds whatever attitude it is left in and drifts. Angle self-levels to level when the
 // sticks are released, so flying is approachable. Hover is not a value here: it is a separate toggle

@@ -55,7 +55,7 @@ bool FDroneFlightFixedWingLiftSaturatesAtHighAirspeed::RunTest(const FString& Pa
 
 	// Level and flying straight, so Force.Z = LiftForce - Mass * GravityAccel with no vertical drag.
 	const FDroneForces Forces = DroneFlight::ComputeFixedWingForces(Intent, ForwardFlight(VeryFast), Params);
-	const float LiftForce = (float)Forces.Force.Z + Params.Mass * Params.GravityAccel;
+	const float LiftForce = (float)Forces.Force.Z + Params.Mass * DroneFlight::GravityAccel;
 
 	TestTrue(TEXT("lift force saturates at the cap"), FMath::IsNearlyEqual(LiftForce, Params.MaxLift, 1.f));
 	return true;

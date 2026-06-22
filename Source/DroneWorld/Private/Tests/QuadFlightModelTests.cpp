@@ -36,7 +36,7 @@ bool FDroneFlightQuadCollectiveProducesLift::RunTest(const FString& Parameters)
 
 	const FDroneForces Forces = DroneFlight::ComputeQuadForces(Intent, State, Params);
 
-	TestTrue(TEXT("default thrust force exceeds the drone's weight"), Params.MaxThrust > Params.Mass * Params.GravityAccel);
+	TestTrue(TEXT("default thrust force exceeds the drone's weight"), Params.MaxThrust > Params.Mass * DroneFlight::GravityAccel);
 	TestTrue(TEXT("net force points upward at full throttle"), Forces.Force.Z > 0.f);
 	return true;
 }

@@ -81,7 +81,7 @@ bool FDroneAssistQuadHoverHoldsAtSetpoint::RunTest(const FString& Parameters)
 	const FDroneForces Forces = DroneFlight::ComputeQuadHoverForces(Released, State, Hold, Params);
 
 	TestTrue(TEXT("no horizontal force when parked on the setpoint"), FMath::IsNearlyZero((float)Forces.Force.X) && FMath::IsNearlyZero((float)Forces.Force.Y));
-	TestTrue(TEXT("upward force balances weight"), FMath::IsNearlyEqual((float)Forces.Force.Z, Params.Mass * Params.GravityAccel, 1.f));
+	TestTrue(TEXT("upward force balances weight"), FMath::IsNearlyEqual((float)Forces.Force.Z, Params.Mass * DroneFlight::GravityAccel, 1.f));
 	return true;
 }
 
@@ -104,7 +104,7 @@ bool FDroneAssistQuadHoverPullsTowardSetpoint::RunTest(const FString& Parameters
 	const FDroneForces Forces = DroneFlight::ComputeQuadHoverForces(Released, State, Hold, Params);
 
 	TestTrue(TEXT("force pushes back toward the hold point horizontally"), Forces.Force.X < 0.f);
-	TestTrue(TEXT("force lifts harder than weight when below the hold altitude"), Forces.Force.Z > Params.Mass * Params.GravityAccel);
+	TestTrue(TEXT("force lifts harder than weight when below the hold altitude"), Forces.Force.Z > Params.Mass * DroneFlight::GravityAccel);
 	return true;
 }
 

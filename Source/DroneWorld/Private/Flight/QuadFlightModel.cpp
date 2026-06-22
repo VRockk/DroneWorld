@@ -16,7 +16,7 @@ FDroneForces DroneFlight::ComputeQuadForces(
 
 	// Gravity always pulls straight down. As a force it scales with mass, so its acceleration is the
 	// same for any drone (everything falls at GravityAccel).
-	const FVector GravityForce = FVector(0.f, 0.f, -Params.GravityAccel * Params.Mass);
+	const FVector GravityForce = FVector(0.f, 0.f, -DroneFlight::GravityAccel * Params.Mass);
 
 	// Linear drag is an aerodynamic force opposing world velocity, independent of mass.
 	const FVector DragForce = -State.Velocity * Params.DragCoefficient;
@@ -50,7 +50,7 @@ FDroneForces DroneFlight::ComputeQuadHoverForces(
 	const FVector RestoreAccel = DroneFlight::CriticalSpring(Offset, State.Velocity, Params.HoverPositionGain);
 
 	// Cancel gravity so the hold neither sinks nor climbs when sitting on the setpoint.
-	const FVector GravityComp(0.f, 0.f, Params.GravityAccel);
+	const FVector GravityComp(0.f, 0.f, DroneFlight::GravityAccel);
 	Out.Force = (RestoreAccel + GravityComp) * Params.Mass;
 
 	// Hold the airframe flat: a critically damped pull of roll and pitch back to level, with a zero
